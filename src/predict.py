@@ -18,9 +18,11 @@ MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 PIPELINE_PATH = MODELS_DIR / "churn_pipeline.joblib"
 DECISION_PATH = MODELS_DIR / "decision.json"
 
-# The raw input schema the pipeline expects (order is not required by the pipeline — it
-# selects by column name — but the list documents the contract for callers and the app).
-FEATURE_ORDER = [
+# The raw input schema the pipeline expects. Column ORDER does not matter (the
+# ColumnTransformer selects by name), but every one of these names must be present — so
+# predict_one validates an incoming record against this list and fails loudly on a missing
+# field instead of letting it surface as a cryptic KeyError deep inside the transformer.
+REQUIRED_FEATURES = [
     "gender", "SeniorCitizen", "Partner", "Dependents", "tenure", "PhoneService",
     "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
     "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies", "Contract",
@@ -61,9 +63,16 @@ def predict_one(record: dict, threshold: float | None = None) -> dict:
     threshold = _load_threshold() if threshold is None else threshold
     pipeline = _load_pipeline()
 
+    # Validate up front so a caller who forgets a field gets one clear message naming exactly
+    # what is missing, rather than a KeyError raised from inside the ColumnTransformer that
+    # points at sklearn internals instead of their input.
+    missing = [f for f in REQUIRED_FEATURES if f not in record]
+    if missing:
+        raise ValueError(f"record is missing required feature(s): {missing}")
+
     # WHY a one-row DataFrame and not a bare array: the ColumnTransformer selects columns by
-    # name, so the input must be a labeled frame. Missing engineered columns are fine — the
-    # pipeline's FunctionTransformer adds num_addon_services itself.
+    # name, so the input must be a labeled frame. The engineered num_addon_services column is
+    # intentionally NOT required from the caller — the pipeline's FunctionTransformer derives it.
     frame = pd.DataFrame([record])
     proba = float(pipeline.predict_proba(frame)[0, 1])
 
