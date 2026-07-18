@@ -141,8 +141,7 @@ pip install -r requirements.txt
 # macOS + XGBoost needs the OpenMP runtime:  brew install libomp
 
 # 3. Put the dataset at data/raw/telco_churn.csv
-#    (download from the Kaggle link above)
-
+#    curl -L -o data/raw/telco_churn.csv https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/master/data/Telco-Customer-Churn.csv
 # 4. Train, select, and persist the winning pipeline
 python -m src.train
 
