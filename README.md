@@ -156,3 +156,7 @@ streamlit run app/streamlit_app.py
 ```
 
 All randomness is seeded (`random_state=42`) for reproducibility.
+
+## License
+
+Released under the [MIT License](LICENSE).
