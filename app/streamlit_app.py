@@ -14,8 +14,12 @@ from pathlib import Path
 
 import matplotlib
 
+# WHY force the non-interactive Agg backend: the app renders on a headless server and hands
+# finished Figure objects to st.pyplot — there is no desktop display for an interactive backend
+# to draw into, and letting matplotlib pick a GUI backend here can hang or error on the server.
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import shap
 import streamlit as st
@@ -26,6 +30,9 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# Reuse the loaders from src.predict on purpose: model loading and the business threshold have
+# exactly one definition there, so the app and the CLI/API can never score against a different
+# model or cutoff. (Underscore-prefixed, but this is the same codebase, not an external import.)
 from src.features import get_feature_names  # noqa: E402
 from src.predict import _load_pipeline, _load_threshold  # noqa: E402
 
@@ -97,7 +104,14 @@ def input_form() -> dict:
 
 
 def local_shap(pipeline, record: dict):
-    """Compute SHAP contributions for this single record on the transformed features."""
+    """Return this one customer's top SHAP contributions (mirrors evaluate.py's global version).
+
+    WHY explain the TRANSFORMED matrix and not the raw record: SHAP attributes the prediction to
+    the columns the classifier actually sees — the scaled numerics and one-hot dummies — so we
+    push the raw record through the already-fitted preprocessing (pipeline[:-1], never refit) and
+    explain the resulting named row. Explaining the raw fields would attribute nothing, since the
+    classifier never sees them directly.
+    """
     pre = pipeline[:-1]
     clf = pipeline.named_steps["clf"]
     frame = pd.DataFrame([record])
@@ -105,6 +119,8 @@ def local_shap(pipeline, record: dict):
     names = get_feature_names(pipeline.named_steps["preprocess"])
     x_df = pd.DataFrame(x_trans, columns=names)
 
+    # TreeExplainer is exact and fast for the RF/XGB winners; fall back to the model-agnostic
+    # explainer for the linear baseline.
     try:
         explainer = shap.TreeExplainer(clf)
         values = explainer.shap_values(x_df)
@@ -112,8 +128,9 @@ def local_shap(pipeline, record: dict):
         explainer = shap.Explainer(clf, x_df)
         values = explainer(x_df).values
 
-    import numpy as np
-
+    # Collapse SHAP's version-dependent output to the positive-class 2-D matrix: newer shap
+    # returns (n, features, classes) for classifiers, older versions a [class0, class1] list;
+    # either way we want the churn (index 1) contributions.
     sv = np.asarray(values)
     if sv.ndim == 3:
         sv = sv[:, :, 1]
@@ -121,6 +138,7 @@ def local_shap(pipeline, record: dict):
         sv = np.asarray(values[1])
     contrib = pd.DataFrame({"feature": names, "shap_value": sv[0]})
     contrib["abs"] = contrib["shap_value"].abs()
+    # Rank by absolute impact so the strongest churn-pushers and churn-dampeners both surface.
     return contrib.sort_values("abs", ascending=False).head(8)
 
 

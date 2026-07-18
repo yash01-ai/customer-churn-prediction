@@ -111,10 +111,11 @@ def _candidate_models(y_train) -> dict:
         class_weight="balanced",
         random_state=RANDOM_STATE,
         # WHY n_jobs=1 on the estimator even though RF is embarrassingly parallel: the outer
-        # RandomizedSearchCV/cross_val_score already fan out across cores. Letting the inner
-        # model also grab every core nests two process pools, oversubscribes the CPU (slower,
-        # not faster), and spams the interpreter-exit resource tracker. Parallelize once, at
-        # the search layer, where there are more independent fits to spread.
+        # RandomizedSearchCV/cross_val_score already fan out across cores (see PARALLEL_BACKEND
+        # above). If the inner model ALSO grabbed every core, the two layers would multiply into
+        # far more workers than CPUs — oversubscription that thrashes the scheduler and runs
+        # slower, not faster. Parallelize once, at the search layer, where there are many more
+        # independent fits (n_iter x n_folds) to keep the cores busy.
         n_jobs=1,
     )
 

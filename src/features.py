@@ -88,11 +88,20 @@ def build_preprocessor() -> ColumnTransformer:
             # (a new PaymentMethod, say) would otherwise raise and take the service down.
             # "ignore" encodes it as an all-zeros row instead, degrading gracefully. Fitting
             # happens on train folds only, so this leaks nothing.
+            #
+            # WHY sparse_output=False: with only ~45 output columns the dense matrix is tiny,
+            # and SHAP's explainers, the DataFrame we build for plotting, and get_feature_names_out
+            # consumers all expect a plain 2-D array — a sparse matrix would force conversions
+            # (or silently fail) at those call sites. Dense here costs nothing and avoids that.
             ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), CATEGORICAL_FEATURES),
             ("bin", "passthrough", BINARY_PASSTHROUGH),
         ],
         remainder="drop",
-        # Keep column count stable and predictable for downstream SHAP naming.
+        # WHY verbose_feature_names_out=True: it prefixes each output column with its transformer
+        # name (num__tenure, cat__Contract_Two year, bin__SeniorCitizen). That does NOT change how
+        # many columns come out — it guarantees the names are unique and self-describing, so a SHAP
+        # plot or coefficient table can never confuse, say, a raw column with a one-hot level of the
+        # same stem. Traceable feature names are worth the longer labels.
         verbose_feature_names_out=True,
     )
 
