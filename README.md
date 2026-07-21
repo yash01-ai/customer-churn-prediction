@@ -8,6 +8,12 @@ This is an end-to-end, production-shaped project: cleaning, leakage-safe preproc
 model selection, business-cost threshold tuning, explainability, a single-record scoring
 API, and a Streamlit app — all wired through one persisted scikit-learn `Pipeline`.
 
+## Key results
+
+- **PR-AUC 0.663** (ROC-AUC 0.847) on the held-out test set — well above the 0.265 no-skill baseline.
+- Business-cost threshold (0.295) lifts churner **recall from 80% to 93%**, cutting expected cost ~9% per customer vs a naive 0.5 cutoff.
+- Top churn drivers (SHAP): month-to-month contract, low tenure, no online security.
+
 ## Problem framing
 
 Telecom churn is a **class-imbalanced, cost-asymmetric** problem:
